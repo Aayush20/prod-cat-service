@@ -1,5 +1,6 @@
 package org.example.prodcatservice.dtos.product.requestDtos;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Getter;
 import lombok.Setter;
 import org.example.prodcatservice.models.Category;
@@ -8,13 +9,26 @@ import org.example.prodcatservice.models.Product;
 @Getter
 @Setter
 public class CreateProductRequestDto {
+    @Schema(description = "Product title", example = "iPhone 15 Pro")
     private String title;
+
+    @Schema(description = "Product description", example = "Latest Apple smartphone with A17 chip")
     private String description;
+
+    @Schema(description = "Price of product", example = "1299.99")
     private double price;
+
+    @Schema(description = "Name of category", example = "electronics")
     private String categoryName;
+
+    @Schema(description = "Available stock", example = "20")
     private int stock;
-    private String seller;
+
+    @Schema(description = "Image URL", example = "https://cdn.example.com/products/iphone15pro.png")
     private String imageUrl;
+
+    @Schema(description = "Seller name", example = "Apple Store")
+    private String seller;
 
     public String getTitle() {
         return title;

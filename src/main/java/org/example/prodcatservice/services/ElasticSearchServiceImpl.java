@@ -2,61 +2,75 @@ package org.example.prodcatservice.services;
 
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch._types.SortOrder;
+import co.elastic.clients.elasticsearch._types.query_dsl.*;
 import co.elastic.clients.elasticsearch.core.DeleteRequest;
 import co.elastic.clients.elasticsearch.core.IndexRequest;
-import co.elastic.clients.elasticsearch.core.IndexResponse;
 import co.elastic.clients.elasticsearch.core.SearchRequest;
 import co.elastic.clients.elasticsearch.core.SearchResponse;
 import co.elastic.clients.elasticsearch.core.search.Hit;
 import co.elastic.clients.json.JsonData;
+import org.example.prodcatservice.models.FailedIndexTask;
 import org.example.prodcatservice.models.Product;
 import org.example.prodcatservice.models.elasticdocs.ProductDocument;
+import org.example.prodcatservice.repositories.FailedIndexTaskRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.retry.annotation.Backoff;
+import org.springframework.retry.annotation.Retryable;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
-import java.util.stream.Collectors;
+import java.util.Objects;
 
 @Service
 public class ElasticSearchServiceImpl {
 
     private final ElasticsearchClient esClient;
     private final String indexName = "products";
+    private final FailedIndexTaskRepository failedIndexTaskRepository;
 
-    public ElasticSearchServiceImpl(ElasticsearchClient esClient) {
+    public ElasticSearchServiceImpl(ElasticsearchClient esClient,
+                                    FailedIndexTaskRepository failedIndexTaskRepository) {
         this.esClient = esClient;
+        this.failedIndexTaskRepository = failedIndexTaskRepository;
     }
 
-    /**
-     * Index a product into Elasticsearch.
-     */
+    @Retryable(
+            value = IOException.class,
+            maxAttempts = 3,
+            backoff = @Backoff(delay = 2000, multiplier = 2)
+    )
     public void indexProduct(Product product) {
-        // Convert the Product entity into the search document.
         ProductDocument doc = convertToDocument(product);
+        IndexRequest<ProductDocument> request = IndexRequest.of(i -> i
+                .index(indexName)
+                .id(product.getId().toString())
+                .document(doc)
+        );
+
         try {
-            IndexRequest<ProductDocument> request = IndexRequest.of(i -> i
-                    .index(indexName)
-                    .id(product.getId().toString()) // Convert the Long ID to String
-                    .document(doc)
-            );
-            IndexResponse response = esClient.index(request);
-            System.out.println("Indexed product " + product.getId() + " with result: " + response.result().name());
+            esClient.index(request);
+            System.out.println("Indexed product " + product.getId());
         } catch (IOException e) {
-            e.printStackTrace();
+            System.err.println("Elasticsearch indexing failed. Saving to retry queue. Reason: " + e.getMessage());
+            FailedIndexTask task = new FailedIndexTask();
+            task.setProductId(product.getId());
+            task.setReason(e.getMessage());
+            task.setRetryCount(0);
+            task.setLastTriedAt(LocalDateTime.now());
+            failedIndexTaskRepository.save(task);
         }
     }
 
-    /**
-     * Remove a product document from the Elasticsearch index.
-     */
     public void deleteProductFromIndex(Long productId) {
         try {
             DeleteRequest request = DeleteRequest.of(d -> d
                     .index(indexName)
-                    .id(productId.toString()) // Convert the Long ID to String
+                    .id(productId.toString())
             );
             esClient.delete(request);
         } catch (IOException e) {
@@ -64,95 +78,80 @@ public class ElasticSearchServiceImpl {
         }
     }
 
-    /**
-     * Simple search. Returns 10 products that match the query, sorted by title.
-     */
-    public List<ProductDocument> simpleSearch(String query) {
+    public Page<ProductDocument> dynamicSearch(String query,
+                                               Double minPrice,
+                                               Double maxPrice,
+                                               String category,
+                                               int page,
+                                               int size,
+                                               String sortBy,
+                                               SortOrder sortOrder) {
         try {
-            SearchRequest request = SearchRequest.of(s -> s
-                    .index(indexName)
-                    .query(q -> q
-                            .multiMatch(mm -> mm
-                                    .query(query)
-                                    .fields("title", "description")
-                            )
-                    )
-                    .sort(so -> so.field(f -> f.field("title").order(SortOrder.Asc)))
-                    .size(10)
-            );
-            SearchResponse<ProductDocument> response = esClient.search(request, ProductDocument.class);
-            return response.hits().hits().stream()
-                    .map(Hit::source)
-                    .collect(Collectors.toList());
-        } catch (IOException e) {
-            e.printStackTrace();
-            return null;
-        }
-    }
+            List<Query> mustQueries = new ArrayList<>();
+            List<Query> filterQueries = new ArrayList<>();
 
-    /**
-     * Filtered search with pagination and sorting.
-     *
-     * @param query     The query string to search in title and description.
-     * @param minPrice  Optional minimum price filter.
-     * @param maxPrice  Optional maximum price filter.
-     * @param page      Page number (0-based index).
-     * @param size      Number of products per page.
-     * @param sortBy    The field to sort by.
-     * @param sortOrder Sort order (ASC or DESC).
-     * @return Page of matched products.
-     */
-    public Page<ProductDocument> filteredSearch(String query, Double minPrice, Double maxPrice,
-                                                int page, int size, String sortBy, SortOrder sortOrder) {
-        try {
-            SearchRequest.Builder searchRequestBuilder = new SearchRequest.Builder()
-                    .index(indexName)
-                    .from(page * size)
-                    .size(size)
-                    .sort(s -> s.field(f -> f
-                            .field(sortBy)
-                            .order(sortOrder)
-                    ));
+            // Full-text search
+            if (query != null && !query.isBlank()) {
+                MultiMatchQuery matchQuery = MultiMatchQuery.of(m -> m
+                        .query(query)
+                        .fields("title", "description")
+                );
+                mustQueries.add(Query.of(q -> q.multiMatch(matchQuery)));
+            }
 
-            // Build a bool query with a must clause for the text search and a filter clause for price range.
-            searchRequestBuilder.query(q -> q
+            // Category filter
+            if (category != null && !category.isBlank()) {
+                filterQueries.add(Query.of(q -> q
+                        .term(t -> t
+                                .field("categoryName.keyword")
+                                .value(category)
+                        )
+                ));
+            }
+
+            // Price filter temporarily removed
+            // if (minPrice != null || maxPrice != null) {
+            //     filterQueries.add(Query.of(q -> q.range(r -> {
+            //         r.field("price");
+            //         if (minPrice != null) r.gte(JsonData.of(minPrice));
+            //         if (maxPrice != null) r.lte(JsonData.of(maxPrice));
+            //         return r;
+            //     })));
+            // }
+
+            // Final query
+            Query finalQuery = Query.of(q -> q
                     .bool(b -> {
-                        b.must(m -> m
-                                .multiMatch(mm -> mm
-                                        .query(query)
-                                        .fields("title", "description")
-                                )
-                        );
-
-
-
-
-
+                        if (!mustQueries.isEmpty()) b.must(mustQueries);
+                        if (!filterQueries.isEmpty()) b.filter(filterQueries);
                         return b;
                     })
             );
 
-            SearchRequest request = searchRequestBuilder.build();
-            SearchResponse<ProductDocument> response = esClient.search(request, ProductDocument.class);
+            SearchRequest searchRequest = SearchRequest.of(s -> s
+                    .index(indexName)
+                    .from(page * size)
+                    .size(size)
+                    .sort(sort -> sort.field(f -> f.field(sortBy).order(sortOrder)))
+                    .query(finalQuery)
+            );
 
-            // Retrieve total hits count.
-            long totalHits = response.hits().total() != null ? response.hits().total().value() : 0;
-
-            // Collect the search results.
-            List<ProductDocument> results = response.hits().hits().stream()
+            SearchResponse<ProductDocument> response = esClient.search(searchRequest, ProductDocument.class);
+            List<ProductDocument> products = response.hits().hits().stream()
                     .map(Hit::source)
-                    .collect(Collectors.toList());
+                    .filter(Objects::nonNull)
+                    .toList();
 
-            return new PageImpl<>(results, PageRequest.of(page, size), totalHits);
+            long totalHits = response.hits().total() != null ? response.hits().total().value() : 0;
+            return new PageImpl<>(products, PageRequest.of(page, size), totalHits);
+
         } catch (IOException e) {
             e.printStackTrace();
             return Page.empty();
         }
     }
 
-    /**
-     * Helper: Convert a Product into a ProductDocument.
-     */
+
     private ProductDocument convertToDocument(Product product) {
         String categoryName = product.getCategory() != null ? product.getCategory().getName() : null;
         return new ProductDocument(
@@ -167,3 +166,4 @@ public class ElasticSearchServiceImpl {
         );
     }
 }
+

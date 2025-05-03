@@ -1,18 +1,20 @@
 package org.example.prodcatservice.models.elasticdocs;
 
-import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import lombok.AllArgsConstructor;
 
 @Data
-@AllArgsConstructor
+@Builder
 @NoArgsConstructor
+@AllArgsConstructor
 public class ProductDocument {
     private Long id;
     private String title;
     private String description;
     private double price;
-    private String categoryName;  // from Category.name if available
+    private String categoryName;
     private int stock;
     private String seller;
     private String imageUrl;
@@ -22,17 +24,6 @@ public class ProductDocument {
         return "ProductDocument{" +
                 "id=" + id +
                 '}';
-    }
-
-    public ProductDocument( Long id, String title, String description, double price, String categoryName, int stock,String seller, String imageUrl) {
-        this.id = id;
-        this.title = title;
-        this.description = description;
-        this.price = price;
-        this.categoryName = categoryName;
-        this.stock = stock;
-        this.seller = seller;
-        this.imageUrl = imageUrl;
     }
 
     public Long getId() {
@@ -99,4 +90,3 @@ public class ProductDocument {
         this.imageUrl = imageUrl;
     }
 }
-

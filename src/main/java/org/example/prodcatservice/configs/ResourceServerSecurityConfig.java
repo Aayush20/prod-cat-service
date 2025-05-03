@@ -18,8 +18,12 @@ public class ResourceServerSecurityConfig {
                 .csrf(csrf -> csrf.disable())
                 // Require authentication on any request
                 .authorizeHttpRequests(authorize ->
-                        authorize.anyRequest().authenticated()
+                        authorize
+                                .requestMatchers("/swagger-ui.html", "/v3/api-docs/**").permitAll()
+                                .requestMatchers("/actuator/**").permitAll()
+                        .anyRequest().authenticated()
                 )
+
                 // Enable OAuth2 Resource Server support with JWT validation.
                 // The JwtDecoder will be autoconfigured based on the issuer-uri property.
                 .oauth2ResourceServer(oauth2 ->

@@ -89,4 +89,18 @@ public class ProductDocument {
     public void setImageUrl(String imageUrl) {
         this.imageUrl = imageUrl;
     }
+
+    public ProductDocument(Long id, String title, String description, double price,
+                           String categoryName, int stock, String seller, String imageUrl) {
+        this.id = id;
+        this.title = title;
+        this.description = description;
+        this.price = price;
+        this.categoryName = categoryName;
+        this.stock = stock;
+        this.seller = seller;
+        this.imageUrl = imageUrl;
+    }
+
+
 }

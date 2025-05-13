@@ -2,7 +2,11 @@ package org.example.prodcatservice.controllers;
 
 import co.elastic.clients.elasticsearch._types.SortOrder;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import org.example.prodcatservice.dtos.common.BaseResponse;
 import org.example.prodcatservice.models.elasticdocs.ProductDocument;
 import org.example.prodcatservice.services.ElasticSearchServiceImpl;
 import org.slf4j.Logger;
@@ -24,9 +28,19 @@ public class SearchController {
         this.elasticSearchService = elasticSearchService;
     }
 
-    @Operation(summary = "Dynamic search endpoint with filters, pagination, sorting")
+    @Operation(
+            summary = "Dynamic search with filters, pagination, sorting",
+            description = "Search products using full-text query, price range, category, pagination, and sorting",
+            responses = {
+                    @ApiResponse(responseCode = "200", description = "Search results returned successfully",
+                            content = @Content(mediaType = "application/json", examples = {
+                                    @ExampleObject(name = "Success", value = "{ \"status\": \"SUCCESS\", \"message\": \"Search completed\", \"data\": [ { \"id\": 1, \"title\": \"iPhone 15\", \"price\": 1200 } ] }")
+                            })
+                    )
+            }
+    )
     @GetMapping
-    public Page<ProductDocument> searchProducts(
+    public BaseResponse<Page<ProductDocument>> searchProducts(
             @RequestParam(required = false) String query,
             @RequestParam(required = false) Double minPrice,
             @RequestParam(required = false) Double maxPrice,
@@ -40,6 +54,7 @@ public class SearchController {
         log.info("User {} is performing a dynamic search with query: {}", jwt.getSubject(), query);
         SortOrder order = sortOrder.equalsIgnoreCase("ASC") ? SortOrder.Asc : SortOrder.Desc;
 
-        return elasticSearchService.dynamicSearch(query, minPrice, maxPrice, category, page, size, sortBy, order);
+        Page<ProductDocument> results = elasticSearchService.dynamicSearch(query, minPrice, maxPrice, category, page, size, sortBy, order);
+        return BaseResponse.success("Search completed", results);
     }
 }

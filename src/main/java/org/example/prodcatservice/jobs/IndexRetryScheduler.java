@@ -1,5 +1,6 @@
 package org.example.prodcatservice.jobs;
 
+import io.micrometer.core.instrument.MeterRegistry;
 import org.example.prodcatservice.models.FailedIndexTask;
 import org.example.prodcatservice.models.Product;
 import org.example.prodcatservice.repositories.FailedIndexTaskRepository;
@@ -20,15 +21,18 @@ public class IndexRetryScheduler {
     private final FailedIndexTaskRepository failedIndexTaskRepository;
     private final ProductRepository productRepository;
     private final ElasticSearchServiceImpl elasticSearchService;
+    private final MeterRegistry meterRegistry;
 
     private static final int MAX_RETRY_ATTEMPTS = 3;
 
     public IndexRetryScheduler(FailedIndexTaskRepository failedIndexTaskRepository,
                                ProductRepository productRepository,
-                               ElasticSearchServiceImpl elasticSearchService) {
+                               ElasticSearchServiceImpl elasticSearchService,
+                               MeterRegistry meterRegistry) {
         this.failedIndexTaskRepository = failedIndexTaskRepository;
         this.productRepository = productRepository;
         this.elasticSearchService = elasticSearchService;
+        this.meterRegistry = meterRegistry;
     }
 
     @Scheduled(fixedDelay = 30000)
@@ -45,6 +49,7 @@ public class IndexRetryScheduler {
                         .orElseThrow(() -> new RuntimeException("Product not found for retry: " + task.getProductId()));
 
                 elasticSearchService.indexProduct(product);
+                meterRegistry.counter("elasticsearch.retry.success").increment();
                 failedIndexTaskRepository.delete(task);
                 log.info("Retry succeeded for product {}", task.getProductId());
 
@@ -53,6 +58,7 @@ public class IndexRetryScheduler {
                 task.setReason(e.getMessage());
                 task.setLastTriedAt(LocalDateTime.now());
                 failedIndexTaskRepository.save(task);
+                meterRegistry.counter("elasticsearch.retry.failure").increment();
                 log.warn("Retry failed for product {} (attempt {}): {}", task.getProductId(), task.getRetryCount(), e.getMessage());
             }
         }

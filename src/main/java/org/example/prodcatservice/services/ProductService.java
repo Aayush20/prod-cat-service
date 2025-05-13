@@ -9,7 +9,8 @@ public interface ProductService {
     Product getProduct(Long id);
     void deleteProduct(Long id);
     Product partialUpdateProduct(Long id, Product product);
-    void updateStock(Long productId, int quantity);
+    void updateStock(Long productId, int quantity, String updatedBy, String reason);
+
     boolean isAvailable(Long id, int quantity);
     List<Product> getFeaturedProducts();
 }

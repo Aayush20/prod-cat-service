@@ -2,11 +2,14 @@ package org.example.prodcatservice.services;
 
 import org.example.prodcatservice.dtos.product.requestDtos.CreateProductRequestDto;
 import org.example.prodcatservice.models.Category;
+import org.example.prodcatservice.models.InventoryAuditLog;
 import org.example.prodcatservice.models.Product;
 import org.example.prodcatservice.repositories.CategoryRepository;
+import org.example.prodcatservice.repositories.InventoryAuditLogRepository;
 import org.example.prodcatservice.repositories.ProductRepository;
 import org.springframework.stereotype.Service;
 
+import java.time.Instant;
 import java.util.List;
 
 @Service
@@ -15,13 +18,16 @@ public class HybridProductServiceImpl implements ProductService {
     private final ProductRepository productRepository;
     private final CategoryRepository categoryRepository;
     private final ElasticSearchServiceImpl elasticSearchService;
+    private final InventoryAuditLogRepository inventoryAuditLogRepository;
 
     public HybridProductServiceImpl(ProductRepository productRepository,
                                     CategoryRepository categoryRepository,
-                                    ElasticSearchServiceImpl elasticSearchService) {
+                                    ElasticSearchServiceImpl elasticSearchService,
+                                    InventoryAuditLogRepository inventoryAuditLogRepository) {
         this.productRepository = productRepository;
         this.categoryRepository = categoryRepository;
         this.elasticSearchService = elasticSearchService;
+        this.inventoryAuditLogRepository = inventoryAuditLogRepository;
     }
 
     @Override
@@ -80,14 +86,30 @@ public class HybridProductServiceImpl implements ProductService {
     }
 
     @Override
-    public void updateStock(Long productId, int quantity) {
+    public void updateStock(Long productId, int quantity, String updatedBy, String reason) {
         Product product = productRepository.findById(productId)
                 .orElseThrow(() -> new RuntimeException("Product not found"));
-        if (product.getStock() < quantity) throw new RuntimeException("Insufficient stock.");
-        product.setStock(product.getStock() - quantity);
+
+        int oldStock = product.getStock();
+
+        if (oldStock < quantity) throw new RuntimeException("Insufficient stock.");
+        product.setStock(oldStock - quantity);
         productRepository.save(product);
         elasticSearchService.indexProduct(product);
+
+        // Save Inventory Audit Log
+        InventoryAuditLog log = InventoryAuditLog.builder()
+                .productId(productId)
+                .previousQuantity(oldStock)
+                .newQuantity(product.getStock())
+                .updatedBy(updatedBy)
+                .reason(reason != null ? reason : "Stock reduced after order placement")
+                .timestamp(Instant.now())
+                .build();
+        inventoryAuditLogRepository.save(log);
     }
+
+
 
     @Override
     public boolean isAvailable(Long productId, int quantity) {
@@ -104,4 +126,25 @@ public class HybridProductServiceImpl implements ProductService {
                 .filter(p -> !p.isDeleted())
                 .toList();
     }
+
+    public void setStock(Long productId, int newStock, String updatedBy, String reason) {
+        Product product = productRepository.findById(productId)
+                .orElseThrow(() -> new RuntimeException("Product not found"));
+
+        int oldStock = product.getStock();
+        product.setStock(newStock);
+        productRepository.save(product);
+        elasticSearchService.indexProduct(product);
+
+        InventoryAuditLog log = InventoryAuditLog.builder()
+                .productId(productId)
+                .previousQuantity(oldStock)
+                .newQuantity(newStock)
+                .updatedBy(updatedBy)
+                .reason(reason)
+                .timestamp(Instant.now())
+                .build();
+        inventoryAuditLogRepository.save(log);
+    }
+
 }

@@ -5,7 +5,8 @@ import lombok.Data;
 @Data
 public class UpdateStockRequestDto {
     private Long productId;
-    private int quantity;  // Quantity to deduct
+    private int quantity;
+    private String reason;// Quantity to deduct
 
     public Long getProductId() {
         return productId;
@@ -21,5 +22,12 @@ public class UpdateStockRequestDto {
 
     public void setQuantity(int quantity) {
         this.quantity = quantity;
+    }
+
+    public String getReason() {
+        return reason;
+    }
+    public void setReason(String reason) {
+        this.reason = reason;
     }
 }

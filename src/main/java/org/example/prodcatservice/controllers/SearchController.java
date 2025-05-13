@@ -34,11 +34,25 @@ public class SearchController {
             responses = {
                     @ApiResponse(responseCode = "200", description = "Search results returned successfully",
                             content = @Content(mediaType = "application/json", examples = {
-                                    @ExampleObject(name = "Success", value = "{ \"status\": \"SUCCESS\", \"message\": \"Search completed\", \"data\": [ { \"id\": 1, \"title\": \"iPhone 15\", \"price\": 1200 } ] }")
+                                    @ExampleObject(name = "Success", value = """
+                    {
+                      "status": "SUCCESS",
+                      "message": "Search completed",
+                      "data": {
+                        "content": [
+                          { "id": 1, "title": "iPhone 15", "price": 1200.0 }
+                        ],
+                        "pageable": {...},
+                        "totalPages": 5,
+                        "totalElements": 50
+                      }
+                    }
+                """)
                             })
                     )
             }
     )
+
     @GetMapping
     public BaseResponse<Page<ProductDocument>> searchProducts(
             @RequestParam(required = false) String query,

@@ -5,17 +5,21 @@ import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import org.example.prodcatservice.dtos.common.BaseResponse;
 import org.example.prodcatservice.dtos.product.requestDtos.CreateProductRequestDto;
 import org.example.prodcatservice.dtos.product.requestDtos.PatchProductRequestDto;
+import org.example.prodcatservice.dtos.product.requestDtos.RollbackStockRequestDto;
 import org.example.prodcatservice.dtos.product.requestDtos.UpdateStockRequestDto;
 import org.example.prodcatservice.dtos.product.responseDtos.*;
 import org.example.prodcatservice.models.Product;
 import org.example.prodcatservice.services.ProductService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.cache.CacheManager;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
@@ -30,9 +34,11 @@ public class ProductController {
 
     private static final Logger log = LoggerFactory.getLogger(ProductController.class);
     private final ProductService productService;
+    private final CacheManager cacheManager;
 
-    public ProductController(ProductService productService) {
+    public ProductController(ProductService productService, CacheManager cacheManager) {
         this.productService = productService;
+        this.cacheManager = cacheManager;
     }
 
     @Operation(
@@ -172,4 +178,36 @@ public class ProductController {
                 .collect(Collectors.toList());
         return ResponseEntity.ok(BaseResponse.success("Featured products fetched", response));
     }
+
+
+    @Operation(
+            summary = "Rollback stock on payment/order failure",
+            description = "This is an internal endpoint to rollback stock due to order cancel or payment failure",
+            responses = {
+                    @ApiResponse(responseCode = "200", description = "Stock rolled back successfully",
+                            content = @Content(mediaType = "application/json",
+                                    examples = @ExampleObject(value = "{ \"status\": \"SUCCESS\", \"message\": \"Stock rollback successful\", \"data\": null }")))
+            }
+    )
+    @PostMapping("/internal/rollback-stock")
+    @PreAuthorize("hasAuthority('SCOPE_internal') or hasAuthority('ROLE_ORDER_SERVICE')")
+    public ResponseEntity<BaseResponse<Void>> rollbackStock(@RequestBody @Valid RollbackStockRequestDto dto) {
+        productService.rollbackStock(dto);
+        return ResponseEntity.ok(BaseResponse.success("Stock rollback successful", null));
+    }
+
+    @Operation(summary = "Clear product cache manually (admin only)")
+    @ApiResponse(responseCode = "200", description = "Cache cleared")
+    @DeleteMapping("/internal/cache/clear")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+    public ResponseEntity<BaseResponse<String>> clearProductCache() {
+        if (cacheManager.getCache("products") != null) {
+            cacheManager.getCache("products").clear(); // Clears all product entries
+        }
+        return ResponseEntity.ok(BaseResponse.success("Product cache cleared", "OK"));
+    }
+
+
+
+
 }

@@ -1,19 +1,36 @@
 package org.example.prodcatservice.services;
 
+
+import jakarta.ws.rs.NotFoundException;
+import org.example.prodcatservice.controllers.ProductController;
 import org.example.prodcatservice.dtos.product.requestDtos.CreateProductRequestDto;
+import org.example.prodcatservice.dtos.product.requestDtos.RollbackStockRequestDto;
 import org.example.prodcatservice.models.Category;
 import org.example.prodcatservice.models.InventoryAuditLog;
 import org.example.prodcatservice.models.Product;
 import org.example.prodcatservice.repositories.CategoryRepository;
 import org.example.prodcatservice.repositories.InventoryAuditLogRepository;
 import org.example.prodcatservice.repositories.ProductRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 @Service
 public class HybridProductServiceImpl implements ProductService {
+
+    @Autowired
+    private RedisTemplate<String, Object> redisTemplate;
+
+    private static final Logger log = LoggerFactory.getLogger(ProductController.class);
 
     private final ProductRepository productRepository;
     private final CategoryRepository categoryRepository;
@@ -43,7 +60,7 @@ public class HybridProductServiceImpl implements ProductService {
         return saved;
     }
 
-
+    @Cacheable(value = "products", key = "#id")
     @Override
     public Product getProduct(Long id) {
         Product product = productRepository.findById(id)
@@ -52,6 +69,7 @@ public class HybridProductServiceImpl implements ProductService {
         return product;
     }
 
+    @CacheEvict(value = "products", key = "#id")
     @Override
     public void deleteProduct(Long id) {
         Product product = productRepository.findById(id)
@@ -63,6 +81,7 @@ public class HybridProductServiceImpl implements ProductService {
     }
 
     @Override
+    @CacheEvict(value = "products", key = "#id")
     public Product partialUpdateProduct(Long id, Product updates) {
         Product product = productRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Product not found with id: " + id));
@@ -85,6 +104,7 @@ public class HybridProductServiceImpl implements ProductService {
         return updated;
     }
 
+    @CacheEvict(value = "products", key = "#productId")
     @Override
     public void updateStock(Long productId, int quantity, String updatedBy, String reason) {
         Product product = productRepository.findById(productId)
@@ -92,20 +112,23 @@ public class HybridProductServiceImpl implements ProductService {
 
         int oldStock = product.getStock();
 
-        if (oldStock < quantity) throw new RuntimeException("Insufficient stock.");
-        product.setStock(oldStock - quantity);
+        if (oldStock < quantity) {
+            throw new RuntimeException("Insufficient stock.");
+        }
+
+        int newStock = oldStock - quantity;
+        product.setStock(newStock);
         productRepository.save(product);
         elasticSearchService.indexProduct(product);
 
-        // Save Inventory Audit Log
-        InventoryAuditLog log = InventoryAuditLog.builder()
-                .productId(productId)
-                .previousQuantity(oldStock)
-                .newQuantity(product.getStock())
-                .updatedBy(updatedBy)
-                .reason(reason != null ? reason : "Stock reduced after order placement")
-                .timestamp(Instant.now())
-                .build();
+        InventoryAuditLog log = new InventoryAuditLog();
+        log.setProductId(productId);
+        log.setPreviousQuantity(oldStock);
+        log.setNewQuantity(newStock);
+        log.setUpdatedBy(updatedBy);
+        log.setReason(reason != null ? reason : "Stock reduced after order placement");
+        log.setTimestamp(Instant.now());
+
         inventoryAuditLogRepository.save(log);
     }
 
@@ -120,31 +143,50 @@ public class HybridProductServiceImpl implements ProductService {
 
     @Override
     public List<Product> getFeaturedProducts() {
+        String cacheKey = "featured_products";
+        List<Product> cached = (List<Product>) redisTemplate.opsForValue().get(cacheKey);
+
+        if (cached != null) {
+            log.info("Cache hit for featured products");
+            return cached;
+        }
+
+        log.info("Cache miss for featured products. Fetching from DB...");
         List<Category> categories = categoryRepository.findAll();
-        return categories.stream()
+        List<Product> featured = categories.stream()
                 .flatMap(cat -> cat.getFeaturedProducts().stream())
                 .filter(p -> !p.isDeleted())
                 .toList();
+
+
+        redisTemplate.opsForValue().set(cacheKey, featured, 10, TimeUnit.MINUTES);
+        return featured;
     }
 
-    public void setStock(Long productId, int newStock, String updatedBy, String reason) {
-        Product product = productRepository.findById(productId)
-                .orElseThrow(() -> new RuntimeException("Product not found"));
+
+    @Override
+    public void rollbackStock(RollbackStockRequestDto dto) {
+        Product product = productRepository.findById(dto.getProductId())
+                .orElseThrow(() -> new NotFoundException("Product not found"));
 
         int oldStock = product.getStock();
+        int newStock = oldStock + dto.getQuantity();
+
         product.setStock(newStock);
         productRepository.save(product);
         elasticSearchService.indexProduct(product);
 
-        InventoryAuditLog log = InventoryAuditLog.builder()
-                .productId(productId)
-                .previousQuantity(oldStock)
-                .newQuantity(newStock)
-                .updatedBy(updatedBy)
-                .reason(reason)
-                .timestamp(Instant.now())
-                .build();
+        InventoryAuditLog log = new InventoryAuditLog();
+        log.setProductId(dto.getProductId());
+        log.setPreviousQuantity(oldStock);
+        log.setNewQuantity(newStock);
+        log.setUpdatedBy("system-rollback"); // Or extract from JWT if available
+        log.setReason(dto.getReason() != null ? dto.getReason() : "Stock rollback after payment/order failure");
+        log.setTimestamp(Instant.now());
+
         inventoryAuditLogRepository.save(log);
     }
+
+
 
 }

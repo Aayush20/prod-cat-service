@@ -3,12 +3,11 @@ package org.example.prodcatservice.models.elasticdocs;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import lombok.AllArgsConstructor;
+
 
 @Data
 @Builder
 @NoArgsConstructor
-@AllArgsConstructor
 public class ProductDocument {
     private Long id;
     private String title;

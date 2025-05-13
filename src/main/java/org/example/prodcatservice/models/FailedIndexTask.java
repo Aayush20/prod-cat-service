@@ -2,6 +2,8 @@ package org.example.prodcatservice.models;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import lombok.Data;
 
 import java.time.LocalDateTime;
@@ -18,6 +20,10 @@ public class FailedIndexTask extends BaseModel {
     private int retryCount = 0;
 
     private LocalDateTime lastTriedAt = LocalDateTime.now();
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private RetryStatus status = RetryStatus.PENDING;
 
     public Long getProductId() {
         return productId;
@@ -50,4 +56,7 @@ public class FailedIndexTask extends BaseModel {
     public void setLastTriedAt(LocalDateTime lastTriedAt) {
         this.lastTriedAt = lastTriedAt;
     }
+
+    public RetryStatus getStatus() { return status; }
+    public void setStatus(RetryStatus status) { this.status = status; }
 }

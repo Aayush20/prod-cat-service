@@ -1,20 +1,43 @@
 package org.example.prodcatservice.dtos.product.responseDtos;
 
 import org.example.prodcatservice.models.Product;
+import io.swagger.v3.oas.annotations.media.Schema;
 
 public class GetProductResponseDto {
 
+    @Schema(description = "Product ID", example = "101")
     private Long id;
+
+    @Schema(description = "Product title", example = "MacBook Pro")
     private String title;
+
+    @Schema(description = "Product description", example = "High-performance Apple laptop")
     private String description;
+
+    @Schema(description = "Product price", example = "2399.00")
     private double price;
+
+    @Schema(description = "Image URL", example = "https://cdn.example.com/macbook.png")
     private String imageUrl;
+
+    @Schema(description = "Seller name", example = "Apple Store")
     private String seller;
+
+    @Schema(description = "Available stock", example = "12")
     private int stock;
+
+    @Schema(description = "Category name", example = "electronics")
     private String categoryName;
+
+    @Schema(description = "Response status", example = "SUCCESS")
     private ResponseStatus status;
+
+    @Schema(description = "Response message", example = "Product fetched successfully")
     private String message;
+
+    @Schema(description = "Error code if any", example = "1004")
     private Long errorCode;
+
 
     public Long getId() {
         return id;

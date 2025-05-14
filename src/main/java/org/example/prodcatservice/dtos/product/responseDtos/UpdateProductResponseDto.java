@@ -1,15 +1,29 @@
 package org.example.prodcatservice.dtos.product.responseDtos;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import org.example.prodcatservice.models.Product;
 
 public class UpdateProductResponseDto {
 
+    @Schema(description = "ID of created product", example = "101")
     private Long id;
+
+    @Schema(description = "Product title", example = "iPhone 15")
     private String title;
+
+    @Schema(description = "Product description", example = "Latest iPhone model")
     private String description;
+
+    @Schema(description = "Price of product", example = "1299.99")
     private double price;
+
+    @Schema(description = "Success/Failure", example = "SUCCESS")
     private ResponseStatus status;
+
+    @Schema(description = "Status message", example = "Product created successfully")
     private String message;
+
+    @Schema(description = "Optional error code if failure", example = "1001")
     private Long errorCode;
 
     public Long getId() {

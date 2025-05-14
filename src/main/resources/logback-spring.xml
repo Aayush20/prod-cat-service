@@ -1,15 +1,31 @@
-<?xml version="1.0" encoding="UTF-8"?>
 <configuration>
-    <property name="LOG_PATTERN"
-              value="%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg [requestId=%X{requestId}]%n"/>
+    <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
+    <springProperty name="APP_NAME" source="spring.application.name"/>
 
     <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
-        <encoder>
-            <pattern>${LOG_PATTERN}</pattern>
+        <encoder class="net.logstash.logback.encoder.LoggingEventCompositeJsonEncoder">
+            <providers>
+                <timestamp>
+                    <timeZone>UTC</timeZone>
+                </timestamp>
+                <loggerName/>
+                <pattern>
+                    <pattern>
+                        {
+                        "level": "%level",
+                        "thread": "%thread",
+                        "traceId": "%X{traceId:-}",
+                        "userId": "%X{userId:-}",
+                        "requestId": "%X{requestId:-}",
+                        "message": "%message"
+                        }
+                    </pattern>
+                </pattern>
+            </providers>
         </encoder>
     </appender>
 
-    <root level="DEBUG">
+    <root level="INFO">
         <appender-ref ref="CONSOLE"/>
     </root>
 </configuration>

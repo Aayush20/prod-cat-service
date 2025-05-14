@@ -1,12 +1,19 @@
 package org.example.prodcatservice.dtos.product.requestDtos;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
 @Data
 public class UpdateStockRequestDto {
+    @Schema(description = "Product ID", example = "101")
     private Long productId;
+
+    @Schema(description = "Quantity to deduct", example = "2")
     private int quantity;
-    private String reason;// Quantity to deduct
+
+    @Schema(description = "Reason for stock update", example = "Order placed")
+    private String reason;
+
 
     public Long getProductId() {
         return productId;

@@ -1,10 +1,18 @@
 package org.example.prodcatservice.dtos.product.responseDtos;
 
+import io.swagger.v3.oas.annotations.media.Schema;
+
 public class DeleteProductResponseDto {
 
+    @Schema(description = "Success or failure", example = "SUCCESS")
     private ResponseStatus status;
+
+    @Schema(description = "Detailed message", example = "Product deleted successfully")
     private String message;
+
+    @Schema(description = "Optional error code if failure", example = "1002")
     private Long errorCode;
+
 
     public Long getErrorCode() {
         return errorCode;

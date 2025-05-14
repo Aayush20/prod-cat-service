@@ -1,15 +1,31 @@
 package org.example.prodcatservice.dtos.product.responseDtos;
 
+import io.swagger.v3.oas.annotations.media.Schema;
+
 import java.time.Instant;
 
 public class InventoryLogResponseDto {
+    @Schema(description = "Log entry ID", example = "1")
     private Long id;
+
+    @Schema(description = "Product ID associated with this change", example = "101")
     private Long productId;
+
+    @Schema(description = "Previous quantity", example = "15")
     private Integer previousQuantity;
+
+    @Schema(description = "Updated quantity", example = "12")
     private Integer newQuantity;
+
+    @Schema(description = "Service or user who made the update", example = "order-service")
     private String updatedBy;
+
+    @Schema(description = "Reason for update", example = "Order Placed")
     private String reason;
+
+    @Schema(description = "Timestamp of update", example = "2024-05-13T14:30:00Z")
     private Instant timestamp;
+
 
     public InventoryLogResponseDto() {
     }

@@ -1,16 +1,31 @@
 package org.example.prodcatservice.dtos.product.requestDtos;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import org.example.prodcatservice.models.Category;
 import org.example.prodcatservice.models.Product;
 
 public class PatchProductRequestDto {
+    @Schema(description = "Updated product title", example = "Samsung S24 Ultra")
     private String title;
+
+    @Schema(description = "Updated description", example = "Next-gen Galaxy phone")
     private String description;
+
+    @Schema(description = "Updated price", example = "1099.99")
     private double price;
+
+    @Schema(description = "Updated category", example = "mobiles")
     private String categoryName;
+
+    @Schema(description = "Updated stock", example = "25")
     private int stock;
-    private String seller;
+
+    @Schema(description = "Updated image URL", example = "https://cdn.example.com/samsung.png")
     private String imageUrl;
+
+    @Schema(description = "Updated seller", example = "Samsung Store")
+    private String seller;
+
 
     public String getTitle() {
         return title;

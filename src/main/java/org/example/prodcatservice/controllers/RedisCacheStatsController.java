@@ -1,5 +1,6 @@
 package org.example.prodcatservice.controllers;
 
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import org.springframework.cache.CacheManager;
 import org.springframework.data.redis.cache.RedisCacheManager;
 import org.springframework.data.redis.core.RedisTemplate;
@@ -8,6 +9,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.*;
 
+@SecurityRequirement(name = "bearerAuth")
 @RestController
 @RequestMapping("/admin/cache-stats")
 public class RedisCacheStatsController {

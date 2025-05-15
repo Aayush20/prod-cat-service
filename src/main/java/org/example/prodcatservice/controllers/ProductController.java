@@ -4,6 +4,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.example.prodcatservice.dtos.common.BaseResponse;
@@ -27,6 +28,9 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import static org.example.prodcatservice.utils.JwtClaimUtils.*;
+
+@SecurityRequirement(name = "bearerAuth")
 @RestController
 @RequestMapping("/products")
 @Tag(name = "Product APIs")
@@ -54,6 +58,10 @@ public class ProductController {
     @PostMapping("/")
     public ResponseEntity<BaseResponse<CreateProductResponseDto>> createProduct(@RequestBody CreateProductRequestDto createProductRequestDto,
                                                                                 @AuthenticationPrincipal Jwt jwt) {
+
+        if (!hasRole(jwt, "ADMIN")) {
+            return ResponseEntity.status(403).body(BaseResponse.failure("Only admin can create products."));
+        }
         log.info("User {} is creating a product.", jwt.getSubject());
         Product product = createProductRequestDto.toProduct();
         Product saved = productService.createProduct(product);
@@ -94,6 +102,10 @@ public class ProductController {
     @DeleteMapping("/{id}")
     public ResponseEntity<BaseResponse<String>> deleteProduct(@PathVariable("id") Long id,
                                                               @AuthenticationPrincipal Jwt jwt) {
+
+        if (!hasRole(jwt, "ADMIN")) {
+            return ResponseEntity.status(403).body(BaseResponse.failure("Only admin can delete products."));
+        }
         log.info("User {} is deleting product with id {}", jwt.getSubject(), id);
         productService.deleteProduct(id);
         return ResponseEntity.ok(BaseResponse.success("Product deleted successfully", "Deleted"));
@@ -113,6 +125,11 @@ public class ProductController {
     public ResponseEntity<BaseResponse<PatchProductResponseDto>> partialUpdateProduct(@PathVariable("id") Long id,
                                                                                       @RequestBody PatchProductRequestDto patchProductRequestDto,
                                                                                       @AuthenticationPrincipal Jwt jwt) {
+
+        if (!hasRole(jwt, "ADMIN")) {
+            return ResponseEntity.status(403).body(BaseResponse.failure("Only admin can update products."));
+        }
+
         log.info("User {} is updating product with id {}", jwt.getSubject(), id);
         Product updated = productService.partialUpdateProduct(id, patchProductRequestDto.toProduct());
         PatchProductResponseDto response = PatchProductResponseDto.fromProduct(updated);
@@ -134,7 +151,7 @@ public class ProductController {
     @PatchMapping("/update-stock")
     public ResponseEntity<BaseResponse<String>> updateStock(@RequestBody UpdateStockRequestDto dto,
                                                             @AuthenticationPrincipal Jwt jwt) {
-        if (!"order-service".equalsIgnoreCase(jwt.getClaimAsString("sub"))) {
+        if (!isSystemCall(jwt, "order-service")) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(BaseResponse.failure("Access denied"));
         }
@@ -191,7 +208,12 @@ public class ProductController {
     )
     @PostMapping("/internal/rollback-stock")
     @PreAuthorize("hasAuthority('SCOPE_internal') or hasAuthority('ROLE_ORDER_SERVICE')")
-    public ResponseEntity<BaseResponse<Void>> rollbackStock(@RequestBody @Valid RollbackStockRequestDto dto) {
+    public ResponseEntity<BaseResponse<Void>> rollbackStock(@RequestBody @Valid RollbackStockRequestDto dto,
+                                                            @AuthenticationPrincipal Jwt jwt) {
+
+        if (!hasScope(jwt, "internal") && !hasRole(jwt, "ORDER_SERVICE")) {
+            return ResponseEntity.status(403).body(BaseResponse.failure("Access denied"));
+        }
         productService.rollbackStock(dto);
         return ResponseEntity.ok(BaseResponse.success("Stock rollback successful", null));
     }
@@ -200,14 +222,21 @@ public class ProductController {
     @ApiResponse(responseCode = "200", description = "Cache cleared")
     @DeleteMapping("/internal/cache/clear")
     @PreAuthorize("hasAuthority('ROLE_ADMIN')")
-    public ResponseEntity<BaseResponse<String>> clearProductCache() {
+    public ResponseEntity<BaseResponse<String>> clearProductCache(
+            @AuthenticationPrincipal Jwt jwt) {
+        if (!hasRole(jwt, "ADMIN")) {
+            return ResponseEntity.status(403).body(BaseResponse.failure("Only admin can clear cache."));
+        }
         if (cacheManager.getCache("products") != null) {
             cacheManager.getCache("products").clear(); // Clears all product entries
         }
         return ResponseEntity.ok(BaseResponse.success("Product cache cleared", "OK"));
     }
 
-
+    @GetMapping("/me")
+    public ResponseEntity<?> getJwtClaims(@AuthenticationPrincipal Jwt jwt) {
+        return ResponseEntity.ok(jwt.getClaims());
+    }
 
 
 }

@@ -1,9 +1,12 @@
 package org.example.prodcatservice.controllers;
 
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.example.prodcatservice.dtos.common.BaseResponse;
 import org.example.prodcatservice.dtos.product.responseDtos.InventoryLogResponseDto;
@@ -21,15 +24,21 @@ import org.springframework.web.bind.annotation.*;
 import java.time.Instant;
 import java.util.List;
 
+import static org.example.prodcatservice.utils.JwtClaimUtils.hasRole;
+
+@SecurityRequirement(name = "bearerAuth")
 @RestController
 @RequestMapping("/admin/inventory-logs")
 @Tag(name = "Admin - Inventory Logs")
 public class InventoryAuditLogController {
 
     private final InventoryAuditLogRepository inventoryAuditLogRepository;
+    private final Counter inventoryLogAccessCounter;
 
-    public InventoryAuditLogController(InventoryAuditLogRepository inventoryAuditLogRepository) {
+    public InventoryAuditLogController(InventoryAuditLogRepository inventoryAuditLogRepository,
+                                       MeterRegistry registry) {
         this.inventoryAuditLogRepository = inventoryAuditLogRepository;
+        this.inventoryLogAccessCounter = registry.counter("inventory.logs.accessed");
     }
 
     @Operation(
@@ -54,7 +63,9 @@ public class InventoryAuditLogController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant endDate,
             @AuthenticationPrincipal Jwt jwt) {
 
-        if (!"admin".equalsIgnoreCase(jwt.getClaimAsString("role"))) {
+        inventoryLogAccessCounter.increment();
+
+        if (!hasRole(jwt, "ADMIN")) {
             return ResponseEntity.status(403).body(BaseResponse.failure("Access Denied"));
         }
 

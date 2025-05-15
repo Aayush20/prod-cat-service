@@ -1,10 +1,13 @@
 package org.example.prodcatservice.controllers;
 
 import co.elastic.clients.elasticsearch._types.SortOrder;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.example.prodcatservice.dtos.common.BaseResponse;
 import org.example.prodcatservice.models.elasticdocs.ProductDocument;
@@ -16,6 +19,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
+@SecurityRequirement(name = "bearerAuth")
 @RestController
 @RequestMapping("/search")
 @Tag(name = "Search APIs")
@@ -23,9 +27,11 @@ public class SearchController {
 
     private static final Logger log = LoggerFactory.getLogger(SearchController.class);
     private final ElasticSearchServiceImpl elasticSearchService;
+    private final Counter searchCounter;
 
-    public SearchController(ElasticSearchServiceImpl elasticSearchService) {
+    public SearchController(ElasticSearchServiceImpl elasticSearchService, MeterRegistry registry) {
         this.elasticSearchService = elasticSearchService;
+        this.searchCounter = registry.counter("products.search.count");
     }
 
     @Operation(
@@ -65,6 +71,7 @@ public class SearchController {
             @RequestParam(defaultValue = "ASC") String sortOrder,
             @AuthenticationPrincipal Jwt jwt
     ) {
+        searchCounter.increment();
         log.info("User {} is performing a dynamic search with query: {}", jwt.getSubject(), query);
         SortOrder order = sortOrder.equalsIgnoreCase("ASC") ? SortOrder.Asc : SortOrder.Desc;
 

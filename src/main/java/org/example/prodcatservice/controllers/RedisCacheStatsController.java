@@ -1,11 +1,16 @@
 package org.example.prodcatservice.controllers;
 
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import org.example.prodcatservice.dtos.product.responseDtos.TokenIntrospectionResponseDTO;
+import org.example.prodcatservice.services.TokenService;
+import org.example.prodcatservice.utils.TokenClaimUtils;
 import org.springframework.cache.CacheManager;
 import org.springframework.data.redis.cache.RedisCacheManager;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.*;
 
@@ -16,15 +21,21 @@ public class RedisCacheStatsController {
 
     private final CacheManager cacheManager;
     private final RedisTemplate<String, Object> redisTemplate;
+    private final TokenService tokenService;
 
-    public RedisCacheStatsController(CacheManager cacheManager, RedisTemplate<String, Object> redisTemplate) {
+    public RedisCacheStatsController(CacheManager cacheManager, RedisTemplate<String, Object> redisTemplate, TokenService tokenService) {
         this.cacheManager = cacheManager;
         this.redisTemplate = redisTemplate;
+        this.tokenService = tokenService;
     }
 
     @GetMapping
-    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
-    public Map<String, Object> getCacheStats() {
+    //@PreAuthorize("hasAuthority('ROLE_ADMIN')")
+    public Map<String, Object> getCacheStats(@RequestHeader("Authorization") String tokenHeader) {
+        TokenIntrospectionResponseDTO token = tokenService.introspect(tokenHeader);
+        if (!TokenClaimUtils.hasRole(token, "ADMIN")) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied");
+        }
         Set<String> keys = redisTemplate.keys("*");
         Map<String, Object> stats = new HashMap<>();
         stats.put("cacheNames", cacheManager.getCacheNames());

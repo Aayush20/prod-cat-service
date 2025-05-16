@@ -15,6 +15,8 @@ import org.example.prodcatservice.dtos.product.requestDtos.UpdateStockRequestDto
 import org.example.prodcatservice.dtos.product.responseDtos.*;
 import org.example.prodcatservice.models.Product;
 import org.example.prodcatservice.services.ProductService;
+import org.example.prodcatservice.services.TokenService;
+import org.example.prodcatservice.utils.TokenClaimUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.cache.CacheManager;
@@ -39,10 +41,13 @@ public class ProductController {
     private static final Logger log = LoggerFactory.getLogger(ProductController.class);
     private final ProductService productService;
     private final CacheManager cacheManager;
+    private final TokenService tokenService;
 
-    public ProductController(ProductService productService, CacheManager cacheManager) {
+    public ProductController(ProductService productService, CacheManager cacheManager,
+                             TokenService tokenService) {
         this.productService = productService;
         this.cacheManager = cacheManager;
+        this.tokenService = tokenService;
     }
 
     @Operation(
@@ -57,12 +62,16 @@ public class ProductController {
     )
     @PostMapping("/")
     public ResponseEntity<BaseResponse<CreateProductResponseDto>> createProduct(@RequestBody CreateProductRequestDto createProductRequestDto,
-                                                                                @AuthenticationPrincipal Jwt jwt) {
+                                                                                @RequestHeader("Authorization") String tokenHeader) {
 
-        if (!hasRole(jwt, "ADMIN")) {
+//        if (!hasRole(jwt, "ADMIN")) {
+//            return ResponseEntity.status(403).body(BaseResponse.failure("Only admin can create products."));
+//        }
+        TokenIntrospectionResponseDTO token = tokenService.introspect(tokenHeader);
+        if (!TokenClaimUtils.hasRole(token, "ADMIN")) {
             return ResponseEntity.status(403).body(BaseResponse.failure("Only admin can create products."));
         }
-        log.info("User {} is creating a product.", jwt.getSubject());
+        log.info("User {} is creating a product.", token.getSub());
         Product product = createProductRequestDto.toProduct();
         Product saved = productService.createProduct(product);
         CreateProductResponseDto responseDto = CreateProductResponseDto.fromProduct(saved);
@@ -101,12 +110,13 @@ public class ProductController {
     )
     @DeleteMapping("/{id}")
     public ResponseEntity<BaseResponse<String>> deleteProduct(@PathVariable("id") Long id,
-                                                              @AuthenticationPrincipal Jwt jwt) {
+                                                              @RequestHeader("Authorization") String tokenHeader) {
 
-        if (!hasRole(jwt, "ADMIN")) {
+        TokenIntrospectionResponseDTO token = tokenService.introspect(tokenHeader);
+        if (!TokenClaimUtils.hasRole(token, "ADMIN")) {
             return ResponseEntity.status(403).body(BaseResponse.failure("Only admin can delete products."));
         }
-        log.info("User {} is deleting product with id {}", jwt.getSubject(), id);
+        log.info("User {} is deleting product with id {}", token.getSub(), id);
         productService.deleteProduct(id);
         return ResponseEntity.ok(BaseResponse.success("Product deleted successfully", "Deleted"));
     }
@@ -124,13 +134,14 @@ public class ProductController {
     @PatchMapping("/{id}")
     public ResponseEntity<BaseResponse<PatchProductResponseDto>> partialUpdateProduct(@PathVariable("id") Long id,
                                                                                       @RequestBody PatchProductRequestDto patchProductRequestDto,
-                                                                                      @AuthenticationPrincipal Jwt jwt) {
+                                                                                      @RequestHeader("Authorization") String tokenHeader) {
 
-        if (!hasRole(jwt, "ADMIN")) {
+        TokenIntrospectionResponseDTO token = tokenService.introspect(tokenHeader);
+        if (!TokenClaimUtils.hasRole(token, "ADMIN")) {
             return ResponseEntity.status(403).body(BaseResponse.failure("Only admin can update products."));
         }
 
-        log.info("User {} is updating product with id {}", jwt.getSubject(), id);
+        log.info("User {} is updating product with id {}", token.getSub(), id);
         Product updated = productService.partialUpdateProduct(id, patchProductRequestDto.toProduct());
         PatchProductResponseDto response = PatchProductResponseDto.fromProduct(updated);
         return ResponseEntity.ok(BaseResponse.success("Product updated successfully", response));
@@ -150,12 +161,12 @@ public class ProductController {
     )
     @PatchMapping("/update-stock")
     public ResponseEntity<BaseResponse<String>> updateStock(@RequestBody UpdateStockRequestDto dto,
-                                                            @AuthenticationPrincipal Jwt jwt) {
-        if (!isSystemCall(jwt, "order-service")) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                    .body(BaseResponse.failure("Access denied"));
+                                                            @RequestHeader("Authorization") String tokenHeader) {
+        TokenIntrospectionResponseDTO token = tokenService.introspect(tokenHeader);
+        if (!TokenClaimUtils.isSystemCall(token, "order-service")) {
+            return ResponseEntity.status(403).body(BaseResponse.failure("Access denied"));
         }
-        productService.updateStock(dto.getProductId(), dto.getQuantity(), jwt.getSubject(), dto.getReason());
+        productService.updateStock(dto.getProductId(), dto.getQuantity(), token.getSub(), dto.getReason());
         return ResponseEntity.ok(BaseResponse.success("Stock updated successfully", "OK"));
     }
 
@@ -209,9 +220,10 @@ public class ProductController {
     @PostMapping("/internal/rollback-stock")
     @PreAuthorize("hasAuthority('SCOPE_internal') or hasAuthority('ROLE_ORDER_SERVICE')")
     public ResponseEntity<BaseResponse<Void>> rollbackStock(@RequestBody @Valid RollbackStockRequestDto dto,
-                                                            @AuthenticationPrincipal Jwt jwt) {
+                                                            @RequestHeader("Authorization") String tokenHeader) {
 
-        if (!hasScope(jwt, "internal") && !hasRole(jwt, "ORDER_SERVICE")) {
+        TokenIntrospectionResponseDTO token = tokenService.introspect(tokenHeader);
+        if (!TokenClaimUtils.hasScope(token, "internal") && !TokenClaimUtils.hasRole(token, "ORDER_SERVICE")) {
             return ResponseEntity.status(403).body(BaseResponse.failure("Access denied"));
         }
         productService.rollbackStock(dto);
@@ -223,8 +235,9 @@ public class ProductController {
     @DeleteMapping("/internal/cache/clear")
     @PreAuthorize("hasAuthority('ROLE_ADMIN')")
     public ResponseEntity<BaseResponse<String>> clearProductCache(
-            @AuthenticationPrincipal Jwt jwt) {
-        if (!hasRole(jwt, "ADMIN")) {
+            @RequestHeader("Authorization") String tokenHeader) {
+        TokenIntrospectionResponseDTO token = tokenService.introspect(tokenHeader);
+        if (!TokenClaimUtils.hasRole(token, "ADMIN")) {
             return ResponseEntity.status(403).body(BaseResponse.failure("Only admin can clear cache."));
         }
         if (cacheManager.getCache("products") != null) {
@@ -233,9 +246,15 @@ public class ProductController {
         return ResponseEntity.ok(BaseResponse.success("Product cache cleared", "OK"));
     }
 
+//    @GetMapping("/me")
+//    public ResponseEntity<?> getJwtClaims(@AuthenticationPrincipal Jwt jwt) {
+//        return ResponseEntity.ok(jwt.getClaims());
+//    }
+
+    @Operation(summary = "Get current token claims (debug only)")
     @GetMapping("/me")
-    public ResponseEntity<?> getJwtClaims(@AuthenticationPrincipal Jwt jwt) {
-        return ResponseEntity.ok(jwt.getClaims());
+    public ResponseEntity<?> getCurrentTokenInfo(@RequestHeader("Authorization") String tokenHeader) {
+        return ResponseEntity.ok(tokenService.introspect(tokenHeader));
     }
 
 

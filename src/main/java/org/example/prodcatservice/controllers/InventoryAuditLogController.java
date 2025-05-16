@@ -10,8 +10,11 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.example.prodcatservice.dtos.common.BaseResponse;
 import org.example.prodcatservice.dtos.product.responseDtos.InventoryLogResponseDto;
+import org.example.prodcatservice.dtos.product.responseDtos.TokenIntrospectionResponseDTO;
 import org.example.prodcatservice.models.InventoryAuditLog;
 import org.example.prodcatservice.repositories.InventoryAuditLogRepository;
+import org.example.prodcatservice.services.TokenService;
+import org.example.prodcatservice.utils.TokenClaimUtils;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -34,11 +37,14 @@ public class InventoryAuditLogController {
 
     private final InventoryAuditLogRepository inventoryAuditLogRepository;
     private final Counter inventoryLogAccessCounter;
+    private final TokenService tokenService;
 
     public InventoryAuditLogController(InventoryAuditLogRepository inventoryAuditLogRepository,
-                                       MeterRegistry registry) {
+                                       MeterRegistry registry,
+                                       TokenService tokenService) {
         this.inventoryAuditLogRepository = inventoryAuditLogRepository;
         this.inventoryLogAccessCounter = registry.counter("inventory.logs.accessed");
+        this.tokenService = tokenService;
     }
 
     @Operation(
@@ -61,11 +67,16 @@ public class InventoryAuditLogController {
             @RequestParam(required = false) String updatedBy,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant startDate,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant endDate,
-            @AuthenticationPrincipal Jwt jwt) {
+            @RequestHeader("Authorization") String tokenHeader) {
 
         inventoryLogAccessCounter.increment();
 
-        if (!hasRole(jwt, "ADMIN")) {
+//        if (!hasRole(jwt, "ADMIN")) {
+//            return ResponseEntity.status(403).body(BaseResponse.failure("Access Denied"));
+//        }
+
+        TokenIntrospectionResponseDTO token = tokenService.introspect(tokenHeader);
+        if (!TokenClaimUtils.hasRole(token, "ADMIN")) {
             return ResponseEntity.status(403).body(BaseResponse.failure("Access Denied"));
         }
 

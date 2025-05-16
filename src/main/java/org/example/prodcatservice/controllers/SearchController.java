@@ -10,8 +10,10 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.example.prodcatservice.dtos.common.BaseResponse;
+import org.example.prodcatservice.dtos.product.responseDtos.TokenIntrospectionResponseDTO;
 import org.example.prodcatservice.models.elasticdocs.ProductDocument;
 import org.example.prodcatservice.services.ElasticSearchServiceImpl;
+import org.example.prodcatservice.services.TokenService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
@@ -28,10 +30,12 @@ public class SearchController {
     private static final Logger log = LoggerFactory.getLogger(SearchController.class);
     private final ElasticSearchServiceImpl elasticSearchService;
     private final Counter searchCounter;
+    private final TokenService tokenService;
 
-    public SearchController(ElasticSearchServiceImpl elasticSearchService, MeterRegistry registry) {
+    public SearchController(ElasticSearchServiceImpl elasticSearchService, MeterRegistry registry,TokenService tokenService) {
         this.elasticSearchService = elasticSearchService;
         this.searchCounter = registry.counter("products.search.count");
+        this.tokenService = tokenService;
     }
 
     @Operation(
@@ -69,10 +73,11 @@ public class SearchController {
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(defaultValue = "title") String sortBy,
             @RequestParam(defaultValue = "ASC") String sortOrder,
-            @AuthenticationPrincipal Jwt jwt
+            @RequestHeader("Authorization") String tokenHeader
     ) {
         searchCounter.increment();
-        log.info("User {} is performing a dynamic search with query: {}", jwt.getSubject(), query);
+        TokenIntrospectionResponseDTO token = tokenService.introspect(tokenHeader);
+        log.info("User {} is performing a dynamic search with query: {}", token.getSub(), query);
         SortOrder order = sortOrder.equalsIgnoreCase("ASC") ? SortOrder.Asc : SortOrder.Desc;
 
         Page<ProductDocument> results = elasticSearchService.dynamicSearch(query, minPrice, maxPrice, category, page, size, sortBy, order);

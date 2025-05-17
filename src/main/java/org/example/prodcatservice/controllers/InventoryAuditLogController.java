@@ -27,7 +27,6 @@ import org.springframework.web.bind.annotation.*;
 import java.time.Instant;
 import java.util.List;
 
-import static org.example.prodcatservice.utils.JwtClaimUtils.hasRole;
 
 @SecurityRequirement(name = "bearerAuth")
 @RestController

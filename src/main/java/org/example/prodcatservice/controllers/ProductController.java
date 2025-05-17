@@ -30,7 +30,6 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.stream.Collectors;
 
-import static org.example.prodcatservice.utils.JwtClaimUtils.*;
 
 @SecurityRequirement(name = "bearerAuth")
 @RestController

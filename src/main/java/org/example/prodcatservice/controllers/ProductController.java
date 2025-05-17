@@ -225,9 +225,11 @@ public class ProductController {
         if (!TokenClaimUtils.hasScope(token, "internal") && !TokenClaimUtils.hasRole(token, "ORDER_SERVICE")) {
             return ResponseEntity.status(403).body(BaseResponse.failure("Access denied"));
         }
+
         productService.rollbackStock(dto);
         return ResponseEntity.ok(BaseResponse.success("Stock rollback successful", null));
     }
+
 
     @Operation(summary = "Clear product cache manually (admin only)")
     @ApiResponse(responseCode = "200", description = "Cache cleared")

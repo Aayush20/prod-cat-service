@@ -5,6 +5,7 @@ import jakarta.ws.rs.NotFoundException;
 import org.example.prodcatservice.controllers.ProductController;
 import org.example.prodcatservice.dtos.product.requestDtos.CreateProductRequestDto;
 import org.example.prodcatservice.dtos.product.requestDtos.RollbackStockRequestDto;
+import org.example.prodcatservice.kafka.StockEvent;
 import org.example.prodcatservice.models.Category;
 import org.example.prodcatservice.models.InventoryAuditLog;
 import org.example.prodcatservice.models.Product;
@@ -14,10 +15,12 @@ import org.example.prodcatservice.repositories.ProductRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
+import org.example.prodcatservice.kafka.KafkaPublisher;
 
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -29,6 +32,16 @@ public class HybridProductServiceImpl implements ProductService {
 
     @Autowired
     private RedisTemplate<String, Object> redisTemplate;
+
+    @Autowired
+    private KafkaPublisher kafkaPublisher;
+
+    @Autowired
+    private EmailAlertService emailAlertService;
+
+    @Value("${product.stock.alert.threshold:3}")
+    private int stockThreshold;
+
 
     private static final Logger log = LoggerFactory.getLogger(ProductController.class);
 
@@ -121,6 +134,10 @@ public class HybridProductServiceImpl implements ProductService {
         productRepository.save(product);
         elasticSearchService.indexProduct(product);
 
+        if (newStock <= stockThreshold) {
+            emailAlertService.sendLowStockAlert(product.getTitle(), product.getId(), newStock);
+        }
+
         InventoryAuditLog log = new InventoryAuditLog();
         log.setProductId(productId);
         log.setPreviousQuantity(oldStock);
@@ -130,6 +147,16 @@ public class HybridProductServiceImpl implements ProductService {
         log.setTimestamp(Instant.now());
 
         inventoryAuditLogRepository.save(log);
+        StockEvent event = new StockEvent(
+                product.getId().toString(),
+                quantity,
+                "UPDATED",
+                reason,
+                updatedBy,
+                System.currentTimeMillis()
+        );
+        kafkaPublisher.publishStockUpdatedEvent(event);
+
     }
 
 
@@ -166,26 +193,41 @@ public class HybridProductServiceImpl implements ProductService {
 
     @Override
     public void rollbackStock(RollbackStockRequestDto dto) {
-        Product product = productRepository.findById(dto.getProductId())
-                .orElseThrow(() -> new NotFoundException("Product not found"));
+        for (RollbackStockRequestDto.ProductRollbackEntry entry : dto.getProducts()) {
+            Long productId = entry.getProductId();
+            int quantity = entry.getQuantity();
 
-        int oldStock = product.getStock();
-        int newStock = oldStock + dto.getQuantity();
+            Product product = productRepository.findById(productId)
+                    .orElseThrow(() -> new NotFoundException("Product not found"));
 
-        product.setStock(newStock);
-        productRepository.save(product);
-        elasticSearchService.indexProduct(product);
+            int oldStock = product.getStock();
+            int newStock = oldStock + quantity;
 
-        InventoryAuditLog log = new InventoryAuditLog();
-        log.setProductId(dto.getProductId());
-        log.setPreviousQuantity(oldStock);
-        log.setNewQuantity(newStock);
-        log.setUpdatedBy("system-rollback"); // Or extract from JWT if available
-        log.setReason(dto.getReason() != null ? dto.getReason() : "Stock rollback after payment/order failure");
-        log.setTimestamp(Instant.now());
+            product.setStock(newStock);
+            productRepository.save(product);
+            elasticSearchService.indexProduct(product);
 
-        inventoryAuditLogRepository.save(log);
+            InventoryAuditLog log = new InventoryAuditLog();
+            log.setProductId(productId);
+            log.setPreviousQuantity(oldStock);
+            log.setNewQuantity(newStock);
+            log.setUpdatedBy("system-rollback");
+            log.setReason(dto.getReason() != null ? dto.getReason() : "Rollback due to failure");
+            log.setTimestamp(Instant.now());
+            inventoryAuditLogRepository.save(log);
+
+            StockEvent event = new StockEvent(
+                    product.getId().toString(),
+                    quantity,
+                    "ROLLBACK",
+                    dto.getReason(),
+                    "system-rollback",
+                    System.currentTimeMillis()
+            );
+            kafkaPublisher.publishStockRollbackEvent(event);
+        }
     }
+
 
 
 

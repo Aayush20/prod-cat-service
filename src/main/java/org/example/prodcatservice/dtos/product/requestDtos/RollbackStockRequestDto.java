@@ -1,41 +1,26 @@
-// --- RollbackStockRequestDto.java ---
 package org.example.prodcatservice.dtos.product.requestDtos;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.NotEmpty;
 
+import java.util.List;
+
+@Schema(description = "Request for rolling back product stock (batch)")
 public class RollbackStockRequestDto {
 
-    @Schema(description = "Product ID", example = "1")
-    private Long productId;
+    @NotEmpty
+    @Schema(description = "List of products to rollback")
+    private List<ProductRollbackEntry> products;
 
-    @Schema(description = "Quantity to rollback", example = "3")
-    private int quantity;
-
-    @Schema(description = "Reason for rollback", example = "Order Cancelled")
+    @Schema(description = "Reason for rollback", example = "Order cancelled or payment failed")
     private String reason;
 
-    public RollbackStockRequestDto() {}
-
-    public RollbackStockRequestDto(Long productId, int quantity, String reason) {
-        this.productId = productId;
-        this.quantity = quantity;
-        this.reason = reason;
+    public List<ProductRollbackEntry> getProducts() {
+        return products;
     }
 
-    public Long getProductId() {
-        return productId;
-    }
-
-    public void setProductId(Long productId) {
-        this.productId = productId;
-    }
-
-    public int getQuantity() {
-        return quantity;
-    }
-
-    public void setQuantity(int quantity) {
-        this.quantity = quantity;
+    public void setProducts(List<ProductRollbackEntry> products) {
+        this.products = products;
     }
 
     public String getReason() {
@@ -46,38 +31,34 @@ public class RollbackStockRequestDto {
         this.reason = reason;
     }
 
-    public static RollbackStockRequestDtoBuilder builder() {
-        return new RollbackStockRequestDtoBuilder();
-    }
-
-    public static class RollbackStockRequestDtoBuilder {
+    public static class ProductRollbackEntry {
+        @Schema(description = "Product ID", example = "1")
         private Long productId;
+
+        @Schema(description = "Quantity to rollback", example = "3")
         private int quantity;
-        private String reason;
 
-        public RollbackStockRequestDtoBuilder productId(Long productId) {
+        public ProductRollbackEntry() {}
+
+        public ProductRollbackEntry(Long productId, int quantity) {
             this.productId = productId;
-            return this;
-        }
-
-        public RollbackStockRequestDtoBuilder quantity(int quantity) {
             this.quantity = quantity;
-            return this;
         }
 
-        public RollbackStockRequestDtoBuilder reason(String reason) {
-            this.reason = reason;
-            return this;
+        public Long getProductId() {
+            return productId;
         }
 
-        public RollbackStockRequestDto build() {
-            return new RollbackStockRequestDto(productId, quantity, reason);
+        public void setProductId(Long productId) {
+            this.productId = productId;
+        }
+
+        public int getQuantity() {
+            return quantity;
+        }
+
+        public void setQuantity(int quantity) {
+            this.quantity = quantity;
         }
     }
 }
-
-// --- Note on DTO Usage ---
-// RollbackStockRequestDto is intentionally separate from UpdateStockRequestDto for clarity and flexibility:
-// - UpdateStockRequestDto is used for order placement, reduces stock.
-// - RollbackStockRequestDto is used for failure scenarios, restores stock.
-// - Having separate DTOs allows cleaner Swagger docs, better auditing, and distinct validation logic.

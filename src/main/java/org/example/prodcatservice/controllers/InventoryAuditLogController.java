@@ -13,6 +13,7 @@ import org.example.prodcatservice.dtos.product.responseDtos.InventoryLogResponse
 import org.example.prodcatservice.dtos.product.responseDtos.TokenIntrospectionResponseDTO;
 import org.example.prodcatservice.models.InventoryAuditLog;
 import org.example.prodcatservice.repositories.InventoryAuditLogRepository;
+import org.example.prodcatservice.security.AdminOnly;
 import org.example.prodcatservice.services.TokenService;
 import org.example.prodcatservice.utils.TokenClaimUtils;
 import org.springframework.data.domain.Page;
@@ -59,6 +60,7 @@ public class InventoryAuditLogController {
             }
     )
     @GetMapping
+    @AdminOnly
     public ResponseEntity<BaseResponse<Page<InventoryLogResponseDto>>> getInventoryLogs(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
@@ -74,10 +76,10 @@ public class InventoryAuditLogController {
 //            return ResponseEntity.status(403).body(BaseResponse.failure("Access Denied"));
 //        }
 
-        TokenIntrospectionResponseDTO token = tokenService.introspect(tokenHeader);
-        if (!TokenClaimUtils.hasRole(token, "ADMIN")) {
-            return ResponseEntity.status(403).body(BaseResponse.failure("Access Denied"));
-        }
+//        TokenIntrospectionResponseDTO token = tokenService.introspect(tokenHeader);
+//        if (!TokenClaimUtils.hasRole(token, "ADMIN")) {
+//            return ResponseEntity.status(403).body(BaseResponse.failure("Access Denied"));
+//        }
 
         Page<InventoryAuditLog> logs = inventoryAuditLogRepository.searchLogs(
                 productId, updatedBy, startDate, endDate,

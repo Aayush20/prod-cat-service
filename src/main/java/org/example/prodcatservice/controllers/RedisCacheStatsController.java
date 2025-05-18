@@ -2,6 +2,7 @@ package org.example.prodcatservice.controllers;
 
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import org.example.prodcatservice.dtos.product.responseDtos.TokenIntrospectionResponseDTO;
+import org.example.prodcatservice.security.AdminOnly;
 import org.example.prodcatservice.services.TokenService;
 import org.example.prodcatservice.utils.TokenClaimUtils;
 import org.springframework.cache.CacheManager;
@@ -30,12 +31,8 @@ public class RedisCacheStatsController {
     }
 
     @GetMapping
-    //@PreAuthorize("hasAuthority('ROLE_ADMIN')")
+    @AdminOnly
     public Map<String, Object> getCacheStats(@RequestHeader("Authorization") String tokenHeader) {
-        TokenIntrospectionResponseDTO token = tokenService.introspect(tokenHeader);
-        if (!TokenClaimUtils.hasRole(token, "ADMIN")) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied");
-        }
         Set<String> keys = redisTemplate.keys("*");
         Map<String, Object> stats = new HashMap<>();
         stats.put("cacheNames", cacheManager.getCacheNames());

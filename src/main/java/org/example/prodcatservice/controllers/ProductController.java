@@ -14,6 +14,8 @@ import org.example.prodcatservice.dtos.product.requestDtos.RollbackStockRequestD
 import org.example.prodcatservice.dtos.product.requestDtos.UpdateStockRequestDto;
 import org.example.prodcatservice.dtos.product.responseDtos.*;
 import org.example.prodcatservice.models.Product;
+import org.example.prodcatservice.security.AdminOnly;
+import org.example.prodcatservice.security.HasScope;
 import org.example.prodcatservice.services.ProductService;
 import org.example.prodcatservice.services.TokenService;
 import org.example.prodcatservice.utils.TokenClaimUtils;
@@ -60,17 +62,18 @@ public class ProductController {
             }
     )
     @PostMapping("/")
+    @AdminOnly
     public ResponseEntity<BaseResponse<CreateProductResponseDto>> createProduct(@RequestBody CreateProductRequestDto createProductRequestDto,
                                                                                 @RequestHeader("Authorization") String tokenHeader) {
 
 //        if (!hasRole(jwt, "ADMIN")) {
 //            return ResponseEntity.status(403).body(BaseResponse.failure("Only admin can create products."));
 //        }
-        TokenIntrospectionResponseDTO token = tokenService.introspect(tokenHeader);
-        if (!TokenClaimUtils.hasRole(token, "ADMIN")) {
-            return ResponseEntity.status(403).body(BaseResponse.failure("Only admin can create products."));
-        }
-        log.info("User {} is creating a product.", token.getSub());
+//        TokenIntrospectionResponseDTO token = tokenService.introspect(tokenHeader);
+//        if (!TokenClaimUtils.hasRole(token, "ADMIN")) {
+//            return ResponseEntity.status(403).body(BaseResponse.failure("Only admin can create products."));
+//        }
+        log.info("Admin is creating a product.");
         Product product = createProductRequestDto.toProduct();
         Product saved = productService.createProduct(product);
         CreateProductResponseDto responseDto = CreateProductResponseDto.fromProduct(saved);
@@ -90,8 +93,8 @@ public class ProductController {
     )
     @GetMapping("/{id}")
     public ResponseEntity<BaseResponse<GetProductResponseDto>> getProduct(@PathVariable("id") Long id,
-                                                                          @AuthenticationPrincipal Jwt jwt) {
-        log.info("User {} is fetching product with id {}", jwt.getSubject(), id);
+                                                                          @RequestHeader("Authorization") String tokenHeader) {
+        log.info("User {} is fetching product with id {}", tokenService.introspect(tokenHeader).getSub(), id);
         Product product = productService.getProduct(id);
         GetProductResponseDto response = GetProductResponseDto.fromProduct(product);
         return ResponseEntity.ok(BaseResponse.success("Product fetched successfully", response));
@@ -108,14 +111,11 @@ public class ProductController {
             }
     )
     @DeleteMapping("/{id}")
+    @AdminOnly
     public ResponseEntity<BaseResponse<String>> deleteProduct(@PathVariable("id") Long id,
                                                               @RequestHeader("Authorization") String tokenHeader) {
 
-        TokenIntrospectionResponseDTO token = tokenService.introspect(tokenHeader);
-        if (!TokenClaimUtils.hasRole(token, "ADMIN")) {
-            return ResponseEntity.status(403).body(BaseResponse.failure("Only admin can delete products."));
-        }
-        log.info("User {} is deleting product with id {}", token.getSub(), id);
+        log.info("User {} is deleting product with id {}", tokenService.introspect(tokenHeader).getSub(), id);
         productService.deleteProduct(id);
         return ResponseEntity.ok(BaseResponse.success("Product deleted successfully", "Deleted"));
     }
@@ -131,16 +131,14 @@ public class ProductController {
             }
     )
     @PatchMapping("/{id}")
+    @AdminOnly
     public ResponseEntity<BaseResponse<PatchProductResponseDto>> partialUpdateProduct(@PathVariable("id") Long id,
                                                                                       @RequestBody PatchProductRequestDto patchProductRequestDto,
                                                                                       @RequestHeader("Authorization") String tokenHeader) {
 
-        TokenIntrospectionResponseDTO token = tokenService.introspect(tokenHeader);
-        if (!TokenClaimUtils.hasRole(token, "ADMIN")) {
-            return ResponseEntity.status(403).body(BaseResponse.failure("Only admin can update products."));
-        }
 
-        log.info("User {} is updating product with id {}", token.getSub(), id);
+
+        log.info("User {} is updating product with id {}", tokenService.introspect(tokenHeader).getSub(), id);
         Product updated = productService.partialUpdateProduct(id, patchProductRequestDto.toProduct());
         PatchProductResponseDto response = PatchProductResponseDto.fromProduct(updated);
         return ResponseEntity.ok(BaseResponse.success("Product updated successfully", response));
@@ -159,12 +157,10 @@ public class ProductController {
             }
     )
     @PatchMapping("/update-stock")
+    @HasScope("internal")
     public ResponseEntity<BaseResponse<String>> updateStock(@RequestBody UpdateStockRequestDto dto,
                                                             @RequestHeader("Authorization") String tokenHeader) {
-        TokenIntrospectionResponseDTO token = tokenService.introspect(tokenHeader);
-        if (!TokenClaimUtils.isSystemCall(token, "order-service")) {
-            return ResponseEntity.status(403).body(BaseResponse.failure("Access denied"));
-        }
+        var token = tokenService.introspect(tokenHeader);
         productService.updateStock(dto.getProductId(), dto.getQuantity(), token.getSub(), dto.getReason());
         return ResponseEntity.ok(BaseResponse.success("Stock updated successfully", "OK"));
     }
@@ -217,15 +213,10 @@ public class ProductController {
             }
     )
     @PostMapping("/internal/rollback-stock")
-    @PreAuthorize("hasAuthority('SCOPE_internal') or hasAuthority('ROLE_ORDER_SERVICE')")
+    //@PreAuthorize("hasAuthority('SCOPE_internal') or hasAuthority('ROLE_ORDER_SERVICE')")
+    @HasScope("internal")
     public ResponseEntity<BaseResponse<Void>> rollbackStock(@RequestBody @Valid RollbackStockRequestDto dto,
                                                             @RequestHeader("Authorization") String tokenHeader) {
-
-        TokenIntrospectionResponseDTO token = tokenService.introspect(tokenHeader);
-        if (!TokenClaimUtils.hasScope(token, "internal") && !TokenClaimUtils.hasRole(token, "ORDER_SERVICE")) {
-            return ResponseEntity.status(403).body(BaseResponse.failure("Access denied"));
-        }
-
         productService.rollbackStock(dto);
         return ResponseEntity.ok(BaseResponse.success("Stock rollback successful", null));
     }
@@ -234,13 +225,10 @@ public class ProductController {
     @Operation(summary = "Clear product cache manually (admin only)")
     @ApiResponse(responseCode = "200", description = "Cache cleared")
     @DeleteMapping("/internal/cache/clear")
-    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+    //@PreAuthorize("hasAuthority('ROLE_ADMIN')")
+    @AdminOnly
     public ResponseEntity<BaseResponse<String>> clearProductCache(
             @RequestHeader("Authorization") String tokenHeader) {
-        TokenIntrospectionResponseDTO token = tokenService.introspect(tokenHeader);
-        if (!TokenClaimUtils.hasRole(token, "ADMIN")) {
-            return ResponseEntity.status(403).body(BaseResponse.failure("Only admin can clear cache."));
-        }
         if (cacheManager.getCache("products") != null) {
             cacheManager.getCache("products").clear(); // Clears all product entries
         }

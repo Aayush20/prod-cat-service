@@ -36,7 +36,7 @@ public class EmailAlertService {
         Content content = new Content("text/plain", body);
         Mail mail = new Mail(from, subject, to, content);
 
-        SendGrid sg = new SendGrid(sendGridApiKey);
+        SendGrid sg = getSendGridInstance();
         Request request = new Request();
         try {
             request.setMethod(Method.POST);
@@ -47,5 +47,10 @@ public class EmailAlertService {
         } catch (IOException ex) {
             logger.error("❌ Failed to send low stock alert for product {}: {}", productId, ex.getMessage());
         }
+    }
+
+    // ✅ Exposed for testing
+    protected SendGrid getSendGridInstance() {
+        return new SendGrid(sendGridApiKey);
     }
 }

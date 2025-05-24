@@ -66,4 +66,17 @@ public class StockEvent {
     public void setTimestamp(long timestamp) {
         this.timestamp = timestamp;
     }
+
+    @Override
+    public String toString() {
+        return "StockEvent{" +
+                "productId='" + productId + '\'' +
+                ", quantity=" + quantity +
+                ", eventType='" + eventType + '\'' +
+                ", reason='" + reason + '\'' +
+                ", triggeredBy='" + triggeredBy + '\'' +
+                ", timestamp=" + timestamp +
+                '}';
+    }
+
 }

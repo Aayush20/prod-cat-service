@@ -146,6 +146,13 @@
             <version>4.10.1</version>
         </dependency>
 
+<!--        <dependency>-->
+<!--            <groupId>org.aspectj</groupId>-->
+<!--            <artifactId>aspectjweaver</artifactId>-->
+<!--            <scope>test</scope>-->
+<!--        </dependency>-->
+
+
 
 
         <!-- JUnit Jupiter -->
